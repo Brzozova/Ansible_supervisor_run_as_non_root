@@ -1,0 +1,105 @@
+---
+- hosts: all
+
+  tasks:
+    
+    - name: Configuration to run supervisor as non-root user
+      block:
+      
+        - name: Create supervisor directory
+          file:
+            path: /home/{{ dev_user }}/supervisor/
+            state: directory
+            owner: '{{ dev_user }}'
+            group: www-pub
+            recurse: yes
+
+        - name: Create socket file
+          file:
+            path: /home/{{ dev_user }}/supervisor/supervisor.sock
+            state: touch
+            owner: '{{ dev_user }}'
+            group: www-pub
+
+        - name: Create pid file
+          file:
+            path: /home/{{ dev_user }}/supervisor/supervisord.pid
+            state: touch
+            owner: '{{ dev_user }}'
+            group: www-pub
+
+        - name: Change socket file path
+          lineinfile:
+            dest: /etc/supervisor/supervisord.conf
+            line: 'user={{ dev_user }} '
+            insertafter: '^\[supervisord\]'
+            state: present
+
+        - name: Change log file permissions
+          file:
+            path: /var/log/supervisor/supervisord.log
+            owner: '{{ dev_user }}'
+            group: www-pub
+
+        - name: Change supervisor log directory permissions
+          file:
+            path: /var/log/supervisor/
+            owner: '{{ dev_user }}'
+            group: www-pub
+
+        - name: Change socket file path in unix_http_server section
+          lineinfile:
+            dest: /etc/supervisor/supervisord.conf
+            regex: '^file='
+            line: 'file=/home/{{ dev_user }}/supervisor/supervisor.sock'
+          notify: restart supervisor
+
+        - name: Change socket file path in supervisorctl section
+          lineinfile:
+            dest: /etc/supervisor/supervisord.conf
+            regex: '^serverurl=unix://'
+            line: 'serverurl=unix:///home/{{ dev_user }}/supervisor/supervisor.sock'
+          notify: restart supervisor
+
+        - name: Change pidfile path
+          lineinfile:
+            dest: /etc/supervisor/supervisord.conf
+            regex: '^pidfile='
+            line: 'pidfile=/home/{{ dev_user }}/supervisor/supervisord.pid'
+          notify: restart supervisor
+
+        - name: Set non-root user
+          lineinfile:
+            dest: /etc/supervisor/supervisord.conf
+            line: 'user={{ dev_user }} '
+            insertafter: '^\[supervisord\]'
+            state: present
+          notify: restart supervisor
+
+        # In case of "Unlinking stale socket" error in logs
+        - name: Check if linked path exist
+          stat:
+            path: '/home/{{ dev_user }}/supervisor/supervisor.sock'
+          register: sym
+          notify: restart supervisor
+
+        - debug:
+            msg: "islnk isn't defined (path doesn't exist)"
+          when: sym.stat.islnk is not defined
+
+        - debug:
+            msg: "Path exists and is a symlink"
+          when: sym.stat.islnk is defined and sym.stat.islnk
+
+        - name: Check if linked path exist
+          command: unlink /home/{{ dev_user }}/supervisor/supervisor.sock
+          when: sym.stat.islnk is defined
+          notify: restart supervisor
+      
+      tags: supervisoruser
+
+    handlers:
+    - name: restart supervisor
+      service:
+        name: supervisor
+        state: restarted
