@@ -2,11 +2,30 @@
 - hosts: all
 
   tasks:
+
+    - name: Install supervisor daemon
+    apt: pkg=supervisor state=present
     
+    - name: Set inet_http_server
+      blockinfile:
+        path: /etc/supervisor/supervisord.conf
+        block: |
+          [inet_http_server]
+          port = 127.0.0.1:9010
+      notify:
+        - restart supervisor
+
     - name: Configuration to run supervisor as non-root user
       block:
-      
-        - name: Create supervisor directory
+
+        - name: "Adding {{ dev_user }} to sudoers.d/ dir"
+          lineinfile:
+            path: /etc/sudoers.d/supervisor
+            line: "{{ dev_user}}  ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl"
+            create: yes
+          when: dev_user is defined
+        
+	- name: Create supervisor directory
           file:
             path: /home/{{ dev_user }}/supervisor/
             state: directory
