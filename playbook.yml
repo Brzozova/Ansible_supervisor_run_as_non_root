@@ -24,7 +24,7 @@
             line: "{{ dev_user}}  ALL=(ALL) NOPASSWD: /usr/bin/supervisorctl"
             create: yes
           when: dev_user is defined
-        
+      
 	- name: Create supervisor directory
           file:
             path: /home/{{ dev_user }}/supervisor/
